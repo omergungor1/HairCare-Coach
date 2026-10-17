@@ -1,63 +1,48 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState } from "react";
 import { SectionHeading } from "@/components/common/SectionHeading";
 import { track } from "@/lib/analytics";
 
-function HairlineScene({ variant }) {
-  const hair = variant === "after"
-    ? "M78 168 C92 58 228 58 242 168 C226 118 94 118 78 168 Z"
-    : "M96 132 C112 62 214 62 228 128 C214 104 108 108 96 132 Z";
-
-  return (
-    <svg viewBox="0 0 320 420" className="h-full w-full" role="img" aria-label={variant === "after" ? "Month 4 hairline illustration" : "Month 1 hairline illustration"}>
-      <defs>
-        <linearGradient id={`booth-${variant}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#E7EEEA" />
-          <stop offset="100%" stopColor="#D5DDD8" />
-        </linearGradient>
-      </defs>
-      <rect width="320" height="420" fill={`url(#booth-${variant})`} />
-      <path d="M70 420 V300 C70 250 110 230 160 230 C210 230 250 250 250 300 V420 Z" fill="#CDB7A4" />
-      <ellipse cx="160" cy="176" rx="78" ry="96" fill="#E4C8B0" />
-      <ellipse cx="92" cy="186" rx="12" ry="18" fill="#D7B394" />
-      <path d={hair} fill="#241C18" />
-      <path d="M160 40 V250 M70 176 H250" stroke="#0F3A2E" strokeOpacity="0.35" strokeDasharray="4 6" />
-      <circle cx="160" cy="150" r="4" fill="#10B981" />
-    </svg>
-  );
-}
-
-function CrownScene({ variant }) {
-  const patch = variant === "after" ? 28 : 46;
-  return (
-    <svg viewBox="0 0 320 420" className="h-full w-full" role="img" aria-label={variant === "after" ? "Month 4 crown illustration" : "Month 1 crown illustration"}>
-      <rect width="320" height="420" fill="#E7EEEA" />
-      <ellipse cx="160" cy="200" rx="108" ry="128" fill="#E4C8B0" />
-      <ellipse cx="160" cy="188" rx="90" ry="108" fill="#3A2E28" />
-      <circle cx="160" cy="176" r={patch} fill="#E4C8B0" fillOpacity="0.92" />
-      <path d="M160 70 V300 M70 190 H250" stroke="#F8FAFC" strokeOpacity="0.55" strokeDasharray="4 6" />
-      <circle cx="160" cy="176" r="5" fill="#10B981" />
-      <path d="M160 300 L148 332 H172 Z" fill="#E4C8B0" />
-    </svg>
-  );
-}
+const VIEWS = [
+  {
+    id: "hairline",
+    label: "Front angle",
+    before: "/hair_before.png",
+    after: "/hair_after.png",
+    beforeAlt: "Sample month 1 photo from the front",
+    afterAlt: "Sample month 4 photo from the front",
+  },
+  {
+    id: "crown",
+    label: "Top angle",
+    before: "/hait-top-before.png",
+    after: "/hait-top-after.png",
+    beforeAlt: "Sample month 1 photo from above",
+    afterAlt: "Sample month 4 photo from above",
+  },
+];
 
 export function GhostCameraDemo() {
   const frameRef = useRef(null);
   const used = useRef(false);
   const [position, setPosition] = useState(58);
   const [view, setView] = useState("hairline");
+  const scene = VIEWS.find((item) => item.id === view) ?? VIEWS[0];
+
+  function markUsed() {
+    if (used.current) return;
+    used.current = true;
+    track("demo_ghost_slider_used", { view });
+  }
 
   function updateFromClientX(clientX) {
     const rect = frameRef.current?.getBoundingClientRect();
     if (!rect) return;
     const next = Math.round((Math.min(Math.max(clientX - rect.left, 0), rect.width) / rect.width) * 100);
     setPosition(next);
-    if (!used.current) {
-      used.current = true;
-      track("demo_ghost_slider_used", { view });
-    }
+    markUsed();
   }
 
   function onKeyDown(event) {
@@ -65,13 +50,14 @@ export function GhostCameraDemo() {
     event.preventDefault();
     const delta = event.key === "ArrowRight" ? 4 : -4;
     setPosition((current) => Math.min(100, Math.max(0, current + delta)));
-    if (!used.current) {
-      used.current = true;
-      track("demo_ghost_slider_used", { view });
-    }
+    markUsed();
   }
 
-  const Scene = view === "hairline" ? HairlineScene : CrownScene;
+  function selectView(nextView) {
+    setView(nextView);
+    setPosition(58);
+    used.current = false;
+  }
 
   return (
     <section id="ghost-demo" className="border-y border-surface-border bg-surface-subtle">
@@ -80,27 +66,29 @@ export function GhostCameraDemo() {
           <SectionHeading
             kicker="Ghost overlay preview"
             title="Align month 1 and month 4 without guessing the angle"
-            subtitle="Drag the handle. The outline is the previous photo, kept on the same crosshair. This is an illustration, not a patient result, and the app does not invent hair."
+            subtitle="Drag the handle. Month 4 stays on the left and month 1 on the right, locked to the same frame. Switch between the front and the top of the head. These are sample photos for the alignment demo, not a patient result, and the app does not invent hair."
           />
-          <div className="mt-6 inline-flex rounded-md border border-surface-border bg-surface-card p-1" role="group" aria-label="Alignment view">
-            {[
-              ["hairline", "Hairline Alignment"],
-              ["crown", "Crown Vertex Alignment"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={view === value}
-                onClick={() => {
-                  setView(value);
-                  used.current = false;
-                }}
-                className={`min-h-12 rounded-sm px-4 text-sm font-semibold ${view === value ? "bg-brand-accent text-[#0F172A]" : "text-content-secondary"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <fieldset className="mt-6">
+            <legend className="sr-only">Photo angle</legend>
+            <div className="inline-flex rounded-md border border-surface-border bg-surface-card p-1">
+              {VIEWS.map((item) => (
+                <label
+                  key={item.id}
+                  className={`inline-flex min-h-12 cursor-pointer items-center rounded-sm px-4 text-sm font-semibold focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-accent ${view === item.id ? "bg-brand-accent text-[#0F172A]" : "text-content-secondary"}`}
+                >
+                  <input
+                    type="radio"
+                    name="ghost-angle"
+                    value={item.id}
+                    checked={view === item.id}
+                    onChange={() => selectView(item.id)}
+                    className="sr-only"
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
 
         <div>
@@ -115,9 +103,23 @@ export function GhostCameraDemo() {
               if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromClientX(event.clientX);
             }}
           >
-            <Scene variant="before" />
+            <Image
+              key={`${scene.id}-before`}
+              src={scene.before}
+              alt={scene.beforeAlt}
+              fill
+              sizes="(min-width: 1024px) 384px, 90vw"
+              className="object-cover"
+            />
             <div className="absolute inset-0" style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}>
-              <Scene variant="after" />
+              <Image
+                key={`${scene.id}-after`}
+                src={scene.after}
+                alt={scene.afterAlt}
+                fill
+                sizes="(min-width: 1024px) 384px, 90vw"
+                className="object-cover"
+              />
             </div>
             <div className="pointer-events-none absolute inset-y-0" style={{ left: `${position}%` }}>
               <div className="absolute inset-y-0 -translate-x-1/2 border-l-2 border-white" />
@@ -135,10 +137,10 @@ export function GhostCameraDemo() {
             >
               ||
             </button>
-            <span className="absolute left-3 top-3 rounded-full bg-[#0F3A2E] px-2.5 py-1 text-xs font-semibold text-white">
+            <span className="absolute left-3 top-3 z-10 rounded-full bg-[#0F3A2E] px-2.5 py-1 text-xs font-semibold text-white">
               Month 4
             </span>
-            <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-[#0F172A]">
+            <span className="absolute right-3 top-3 z-10 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-[#0F172A]">
               Month 1
             </span>
           </div>
